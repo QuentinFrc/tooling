@@ -7,7 +7,7 @@ import { cd } from './commands/cd.js'
 import { root } from './commands/root.js'
 import { ide } from './commands/ide.js'
 import { clean } from './commands/clean.js'
-import { env } from './commands/env.js'
+import { sync } from './commands/sync.js'
 
 const program = new Command()
   .name('wt-cli')
@@ -55,9 +55,9 @@ program
   .action(ide)
 
 program
-  .command('env')
-  .description('Sync .env files from main repo to all worktrees')
-  .action(env)
+  .command('sync')
+  .description('Sync env files and IDE config from main repo to all worktrees')
+  .action(sync)
 
 program
   .command('clean')

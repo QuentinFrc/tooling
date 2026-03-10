@@ -33,5 +33,6 @@ export interface WtMeta {
   parentRepo: string
   defaultBranch: string
   envFiles: string[]
+  ideDirs: string[]
   worktrees: string[]
 }

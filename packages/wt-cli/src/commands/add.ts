@@ -3,7 +3,7 @@ import path from 'node:path'
 import * as p from '@clack/prompts'
 import { resolveConfig, readMeta, writeMeta, addWorktreeToMeta } from '../config.js'
 import * as git from '../git.js'
-import { copyEnvFiles } from '../env.js'
+import { copyEnvFiles, copyDirs } from '../env.js'
 
 export async function add(branch: string) {
   const config = await resolveConfig()
@@ -17,6 +17,7 @@ export async function add(branch: string) {
       parentRepo: config.parentRepo,
       defaultBranch: 'develop',
       envFiles: [],
+      ideDirs: [],
       worktrees: [],
     })
   }
@@ -28,9 +29,18 @@ export async function add(branch: string) {
 
   addWorktreeToMeta(config.projectWtDir, dir)
 
-  const envFiles = readMeta(config.projectWtDir)?.envFiles ?? []
+  const meta2 = readMeta(config.projectWtDir)
+  const envFiles = meta2?.envFiles ?? []
   if (envFiles.length > 0) {
     const copied = copyEnvFiles(config.parentRepo, wtPath, envFiles)
+    if (copied.length > 0) {
+      p.log.success(`Copied ${copied.join(', ')} to worktree`)
+    }
+  }
+
+  const ideDirs = meta2?.ideDirs ?? []
+  if (ideDirs.length > 0) {
+    const copied = copyDirs(config.parentRepo, wtPath, ideDirs)
     if (copied.length > 0) {
       p.log.success(`Copied ${copied.join(', ')} to worktree`)
     }

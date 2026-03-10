@@ -34,10 +34,26 @@ export async function setup(options: { base?: string }) {
     p.log.info('All env files are git-tracked, no copy needed')
   }
 
+  // Scan untracked IDE directories
+  const knownIdeDirs = ['.idea', '.vscode', '.cursor', '.zed', '.fleet']
+  const ideDirs: string[] = []
+  for (const dir of knownIdeDirs) {
+    const dirPath = `${config.parentRepo}/${dir}`
+    if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
+      const tracked = await git.isTracked(config.parentRepo, dir)
+      if (!tracked) ideDirs.push(dir)
+    }
+  }
+
+  if (ideDirs.length > 0) {
+    p.log.info(`IDE directories: ${ideDirs.join(', ')}`)
+  }
+
   writeMeta(config.projectWtDir, {
     parentRepo: config.parentRepo,
     defaultBranch,
     envFiles,
+    ideDirs,
     worktrees: existing?.worktrees ?? [],
   })
 
