@@ -8,6 +8,7 @@ import { root } from './commands/root.js'
 import { ide } from './commands/ide.js'
 import { clean } from './commands/clean.js'
 import { sync } from './commands/sync.js'
+import { prepare } from './commands/prepare.js'
 
 const program = new Command()
   .name('wt-cli')
@@ -58,6 +59,12 @@ program
   .command('sync')
   .description('Sync env files and IDE config from main repo to all worktrees')
   .action(sync)
+
+program
+  .command('prepare')
+  .description('Install dependencies in a worktree')
+  .argument('[path]', 'Worktree path (defaults to main repo)')
+  .action(prepare)
 
 program
   .command('clean')

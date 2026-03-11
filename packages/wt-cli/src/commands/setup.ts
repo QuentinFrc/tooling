@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import * as p from '@clack/prompts'
 import { resolveConfig, readMeta, writeMeta } from '../config.js'
 import * as git from '../git.js'
+import { detectPrepareCmd } from './prepare.js'
 
 export async function setup(options: { base?: string }) {
   const config = await resolveConfig()
@@ -49,11 +50,18 @@ export async function setup(options: { base?: string }) {
     p.log.info(`IDE directories: ${ideDirs.join(', ')}`)
   }
 
+  // Detect package manager
+  const prepareCmd = existing?.prepareCmd ?? detectPrepareCmd(config.parentRepo)
+  if (prepareCmd) {
+    p.log.info(`Prepare command: ${prepareCmd}`)
+  }
+
   writeMeta(config.projectWtDir, {
     parentRepo: config.parentRepo,
     defaultBranch,
     envFiles,
     ideDirs,
+    prepareCmd: prepareCmd ?? undefined,
     worktrees: existing?.worktrees ?? [],
   })
 

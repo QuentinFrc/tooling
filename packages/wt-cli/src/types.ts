@@ -34,5 +34,6 @@ export interface WtMeta {
   defaultBranch: string
   envFiles: string[]
   ideDirs: string[]
+  prepareCmd?: string
   worktrees: string[]
 }

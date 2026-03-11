@@ -4,6 +4,7 @@ import * as p from '@clack/prompts'
 import { resolveConfig, readMeta, writeMeta, addWorktreeToMeta } from '../config.js'
 import * as git from '../git.js'
 import { copyEnvFiles, copyDirs } from '../env.js'
+import { detectPrepareCmd, runPrepare } from './prepare.js'
 
 export async function add(branch: string) {
   const config = await resolveConfig()
@@ -44,5 +45,13 @@ export async function add(branch: string) {
     if (copied.length > 0) {
       p.log.success(`Copied ${copied.join(', ')} to worktree`)
     }
+  }
+
+  const prepareCmd = meta2?.prepareCmd ?? detectPrepareCmd(config.parentRepo)
+  if (prepareCmd) {
+    const s2 = p.spinner()
+    s2.start(`Running ${prepareCmd}`)
+    await runPrepare(wtPath, prepareCmd)
+    s2.stop('Dependencies installed')
   }
 }
