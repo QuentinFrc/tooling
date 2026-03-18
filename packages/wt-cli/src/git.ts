@@ -13,12 +13,14 @@ export async function worktreePrune(cwd: string): Promise<void> {
   await execa('git', ['worktree', 'prune'], { cwd })
 }
 
-export async function worktreeAdd(cwd: string, wtPath: string, branch: string): Promise<void> {
+export async function worktreeAdd(cwd: string, wtPath: string, branch: string, startPoint?: string): Promise<void> {
   const exists = await refExists(cwd, branch)
   if (exists) {
     await execa('git', ['worktree', 'add', wtPath, branch], { cwd })
   } else {
-    await execa('git', ['worktree', 'add', wtPath, '-b', branch], { cwd })
+    const args = ['worktree', 'add', wtPath, '-b', branch]
+    if (startPoint) args.push(startPoint)
+    await execa('git', args, { cwd })
   }
 }
 

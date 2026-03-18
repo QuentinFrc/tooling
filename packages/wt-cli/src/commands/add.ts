@@ -23,9 +23,11 @@ export async function add(branch: string) {
     })
   }
 
+  const baseBranch = meta?.defaultBranch ?? 'develop'
+
   const s = p.spinner()
   s.start(`Creating worktree ${dir}`)
-  await git.worktreeAdd(process.cwd(), wtPath, branch)
+  await git.worktreeAdd(process.cwd(), wtPath, branch, baseBranch)
   s.stop(`Worktree created at ${wtPath}`)
 
   addWorktreeToMeta(config.projectWtDir, dir)
