@@ -34,19 +34,9 @@ export function removeWorktreeFromMeta(projectWtDir: string, name: string): void
 
 export async function resolveConfig(): Promise<Config> {
   const wtRoot = process.env.WT_ROOT ?? '/Volumes/Dev/worktrees'
-
-  // Try resolving from a git repo first
-  try {
-    const parentRepo = await getProjectRoot()
-    const project = path.basename(parentRepo)
-    const projectWtDir = path.join(wtRoot, project)
-    return { wtRoot, project, projectWtDir, parentRepo }
-  } catch {
-    // Not in a git repo — try to resolve from a worktree project dir
-  }
-
-  // Check if we're inside a project worktree dir on WT_ROOT
   const cwd = process.cwd()
+
+  // Check if we're inside a project worktree dir on WT_ROOT (prioritize this)
   if (cwd.startsWith(wtRoot)) {
     const relative = path.relative(wtRoot, cwd)
     const project = relative.split(path.sep)[0]
@@ -56,6 +46,23 @@ export async function resolveConfig(): Promise<Config> {
     if (meta) {
       return { wtRoot, project, projectWtDir, parentRepo: meta.parentRepo }
     }
+  }
+
+  // Try resolving from a git repo (main repo only, not worktrees)
+  try {
+    const gitRoot = await getProjectRoot()
+    // Verify we're not inside a worktree by checking .git structure
+    const gitPath = path.join(gitRoot, '.git')
+    const stat = fs.statSync(gitPath)
+
+    // If .git is a directory, we're in the main repo
+    if (stat.isDirectory()) {
+      const project = path.basename(gitRoot)
+      const projectWtDir = path.join(wtRoot, project)
+      return { wtRoot, project, projectWtDir, parentRepo: gitRoot }
+    }
+  } catch {
+    // Not a main repo or .git check failed
   }
 
   throw new Error('Not in a git repository or worktree directory')
