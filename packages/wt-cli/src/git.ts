@@ -27,7 +27,13 @@ export async function worktreeAdd(cwd: string, wtPath: string, branch: string, s
 export async function worktreeRemove(wtPath: string, cwd?: string): Promise<void> {
   // Get branch name before removing
   const branch = await branchCurrent(wtPath)
-  await execa('git', ['worktree', 'remove', wtPath, '--force'])
+  try {
+    await execa('git', ['worktree', 'remove', wtPath, '--force'])
+  } catch {
+    // Worktree may already be pruned but directory still exists — remove manually
+    const { rm } = await import('node:fs/promises')
+    await rm(wtPath, { recursive: true, force: true })
+  }
   // Delete the local branch from the main repo
   if (branch && cwd) {
     try {

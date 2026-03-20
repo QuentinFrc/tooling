@@ -37,10 +37,17 @@ async function classifyOne(wtPath: string, name: string, ref: string, branchLabe
   }
 
   // Parallel: dirty + branch (independent)
-  const [dirtyCount, branch] = await Promise.all([
-    git.statusPorcelain(wtPath),
-    git.branchCurrent(wtPath),
-  ])
+  let dirtyCount: number
+  let branch: string | null
+  try {
+    ;[dirtyCount, branch] = await Promise.all([
+      git.statusPorcelain(wtPath),
+      git.branchCurrent(wtPath),
+    ])
+  } catch {
+    // Directory exists but is no longer a valid git worktree (e.g. pruned)
+    return { ...base, branch: '(broken)', tier: 'stale', pushed: false, detail: 'broken worktree (not a git repo)' }
+  }
   base.branch = branch ?? '(detached)'
 
   // 1. Dirty → kept
