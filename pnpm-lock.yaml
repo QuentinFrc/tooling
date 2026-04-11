@@ -15,6 +15,25 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  packages/claude-cli:
+    dependencies:
+      '@clack/prompts':
+        specifier: ^0.10
+        version: 0.10.1
+      commander:
+        specifier: ^13
+        version: 13.1.0
+      execa:
+        specifier: ^9
+        version: 9.6.1
+    devDependencies:
+      tsup:
+        specifier: ^8
+        version: 8.5.1(typescript@5.9.3)
+      typescript:
+        specifier: ^5.7
+        version: 5.9.3
+
   packages/wt-cli:
     dependencies:
       '@clack/prompts':

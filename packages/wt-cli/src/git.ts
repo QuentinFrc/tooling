@@ -1,4 +1,23 @@
+import fs from 'node:fs'
+import path from 'node:path'
 import { execa } from 'execa'
+
+export function getWorktreeParentRepo(cwd: string): string | null {
+  const gitFilePath = path.join(cwd, '.git')
+  try {
+    const content = fs.readFileSync(gitFilePath, 'utf-8').trim()
+    // .git file contains: gitdir: /path/to/main-repo/.git/worktrees/<name>
+    const match = content.match(/^gitdir:\s+(.+)$/)
+    if (!match) return null
+    const gitdir = match[1]
+    // Strip .git/worktrees/<name> to get the parent repo path
+    const worktreesIdx = gitdir.indexOf('/.git/worktrees/')
+    if (worktreesIdx === -1) return null
+    return gitdir.substring(0, worktreesIdx)
+  } catch {
+    return null
+  }
+}
 
 export async function getProjectRoot(): Promise<string> {
   const { stdout } = await execa('git', ['rev-parse', '--show-toplevel'])

@@ -9,6 +9,7 @@ import { ide } from './commands/ide.js'
 import { clean } from './commands/clean.js'
 import { sync } from './commands/sync.js'
 import { prepare } from './commands/prepare.js'
+import { connect } from './commands/connect.js'
 
 const program = new Command()
   .name('wt-cli')
@@ -65,6 +66,11 @@ program
   .description('Install dependencies in a worktree')
   .argument('[path]', 'Worktree path (defaults to main repo)')
   .action(prepare)
+
+program
+  .command('connect')
+  .description('Connect an orphan worktree to wt-cli')
+  .action(connect)
 
 program
   .command('clean')
