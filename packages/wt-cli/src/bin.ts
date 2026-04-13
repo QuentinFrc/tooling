@@ -10,6 +10,7 @@ import { clean } from './commands/clean.js'
 import { sync } from './commands/sync.js'
 import { prepare } from './commands/prepare.js'
 import { connect } from './commands/connect.js'
+import { rename } from './commands/rename.js'
 
 const program = new Command()
   .name('wt-cli')
@@ -71,6 +72,12 @@ program
   .command('connect')
   .description('Connect an orphan worktree to wt-cli')
   .action(connect)
+
+program
+  .command('rename')
+  .description('Rename a worktree branch and directory')
+  .argument('[name]', 'Worktree name')
+  .action(rename)
 
 program
   .command('clean')
