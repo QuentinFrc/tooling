@@ -1,6 +1,7 @@
 import fs from 'node:fs'
+import path from 'node:path'
 import * as p from '@clack/prompts'
-import { PROJECTS_DIR } from '../paths.js'
+import { localClaudeDir } from '../paths.js'
 
 function dirSize(dirPath: string): number {
   let total = 0
@@ -25,28 +26,32 @@ function formatBytes(bytes: number): string {
 }
 
 export async function status() {
-  p.intro('claude-storage status')
+  const cwd = process.cwd()
+  const project = path.basename(cwd)
+  const claudeDir = localClaudeDir(cwd)
 
-  if (!fs.existsSync(PROJECTS_DIR)) {
-    p.log.warn('~/.claude/projects does not exist.')
-    p.outro('Run Claude Code first to create it.')
+  p.intro(`claude-storage status — ${project}`)
+
+  if (!fs.existsSync(claudeDir)) {
+    p.log.warn('No .claude directory in this project.')
+    p.outro('Run Claude Code here first.')
     return
   }
 
-  const stat = fs.lstatSync(PROJECTS_DIR)
+  const stat = fs.lstatSync(claudeDir)
 
   if (stat.isSymbolicLink()) {
-    const linkTarget = fs.readlinkSync(PROJECTS_DIR)
-    const resolves = fs.existsSync(PROJECTS_DIR)
+    const linkTarget = fs.readlinkSync(claudeDir)
+    const resolves = fs.existsSync(claudeDir)
 
-    p.log.info(`Type: symlink`)
+    p.log.info('Type: symlink')
     p.log.info(`Points to: ${linkTarget}`)
     p.log.info(`Resolves: ${resolves ? 'yes' : 'NO (broken link!)'}`)
 
     if (resolves) {
       const spinner = p.spinner()
       spinner.start('Calculating size...')
-      const size = dirSize(PROJECTS_DIR)
+      const size = dirSize(claudeDir)
       spinner.stop(`Size: ${formatBytes(size)}`)
     }
   } else if (stat.isDirectory()) {
@@ -54,12 +59,12 @@ export async function status() {
 
     const spinner = p.spinner()
     spinner.start('Calculating size...')
-    const size = dirSize(PROJECTS_DIR)
+    const size = dirSize(claudeDir)
     spinner.stop(`Size: ${formatBytes(size)}`)
 
     p.log.info('Run `claude-storage setup` to move to an external volume.')
   } else {
-    p.log.error('~/.claude/projects exists but is not a directory or symlink.')
+    p.log.error('.claude exists but is not a directory or symlink.')
   }
 
   p.outro('')

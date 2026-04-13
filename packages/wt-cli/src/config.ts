@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import type { Config, WtMeta } from './types.js'
-import { getProjectRoot } from './git.js'
+import { getRepoInfo } from './git.js'
 
 const META_FILE = '.wt.json'
 
@@ -48,21 +48,12 @@ export async function resolveConfig(): Promise<Config> {
     }
   }
 
-  // Try resolving from a git repo (main repo only, not worktrees)
-  try {
-    const gitRoot = await getProjectRoot()
-    // Verify we're not inside a worktree by checking .git structure
-    const gitPath = path.join(gitRoot, '.git')
-    const stat = fs.statSync(gitPath)
-
-    // If .git is a directory, we're in the main repo
-    if (stat.isDirectory()) {
-      const project = path.basename(gitRoot)
-      const projectWtDir = path.join(wtRoot, project)
-      return { wtRoot, project, projectWtDir, parentRepo: gitRoot }
-    }
-  } catch {
-    // Not a main repo or .git check failed
+  // Try resolving from a git repo or worktree
+  const repo = await getRepoInfo()
+  if (repo) {
+    const project = path.basename(repo.parentRepo)
+    const projectWtDir = path.join(wtRoot, project)
+    return { wtRoot, project, projectWtDir, parentRepo: repo.parentRepo }
   }
 
   throw new Error('Not in a git repository or worktree directory')

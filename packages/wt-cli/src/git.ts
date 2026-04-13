@@ -2,26 +2,35 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { execa } from 'execa'
 
-export function getWorktreeParentRepo(cwd: string): string | null {
-  const gitFilePath = path.join(cwd, '.git')
-  try {
-    const content = fs.readFileSync(gitFilePath, 'utf-8').trim()
-    // .git file contains: gitdir: /path/to/main-repo/.git/worktrees/<name>
-    const match = content.match(/^gitdir:\s+(.+)$/)
-    if (!match) return null
-    const gitdir = match[1]
-    // Strip .git/worktrees/<name> to get the parent repo path
-    const worktreesIdx = gitdir.indexOf('/.git/worktrees/')
-    if (worktreesIdx === -1) return null
-    return gitdir.substring(0, worktreesIdx)
-  } catch {
-    return null
-  }
-}
+export type RepoInfo =
+  | { kind: 'main'; root: string; parentRepo: string }
+  | { kind: 'worktree'; root: string; parentRepo: string }
 
-export async function getProjectRoot(): Promise<string> {
-  const { stdout } = await execa('git', ['rev-parse', '--show-toplevel'])
-  return stdout.trim()
+export async function getRepoInfo(cwd?: string): Promise<RepoInfo | null> {
+  try {
+    const { stdout } = await execa('git', ['rev-parse', '--show-toplevel'], { cwd })
+    const root = stdout.trim()
+    const gitPath = path.join(root, '.git')
+    const stat = fs.statSync(gitPath)
+
+    if (stat.isDirectory()) {
+      return { kind: 'main', root, parentRepo: root }
+    }
+
+    if (stat.isFile()) {
+      const content = fs.readFileSync(gitPath, 'utf-8').trim()
+      const match = content.match(/^gitdir:\s+(.+)$/)
+      if (!match) return null
+      const gitdir = match[1]
+      const worktreesIdx = gitdir.indexOf('/.git/worktrees/')
+      if (worktreesIdx === -1) return null
+      const parentRepo = gitdir.substring(0, worktreesIdx)
+      return { kind: 'worktree', root, parentRepo }
+    }
+  } catch {
+    // not a git repo
+  }
+  return null
 }
 
 export async function fetch(cwd: string): Promise<void> {

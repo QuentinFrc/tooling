@@ -2,7 +2,6 @@ import fs from 'node:fs'
 import path from 'node:path'
 import * as p from '@clack/prompts'
 import { readMeta, writeMeta, addWorktreeToMeta } from '../config.js'
-import { getWorktreeParentRepo } from '../git.js'
 import { copyEnvFiles, copyDirs } from '../env.js'
 import { detectPrepareCmd, runPrepare } from './prepare.js'
 import * as git from '../git.js'
@@ -18,24 +17,17 @@ export async function connect() {
   }
 
   // Verify we're inside a git worktree (not a main repo)
-  const gitPath = path.join(cwd, '.git')
-  if (!fs.existsSync(gitPath)) {
+  const repo = await git.getRepoInfo(cwd)
+  if (!repo) {
     p.log.error('Not inside a git repository')
     return
   }
-
-  const stat = fs.statSync(gitPath)
-  if (stat.isDirectory()) {
+  if (repo.kind !== 'worktree') {
     p.log.error('This is a main git repository, not a worktree. Run this from inside a worktree.')
     return
   }
 
-  // Parse .git file to find parent repo
-  const parentRepo = getWorktreeParentRepo(cwd)
-  if (!parentRepo) {
-    p.log.error('Could not determine parent repository from .git file')
-    return
-  }
+  const parentRepo = repo.parentRepo
 
   const project = path.basename(parentRepo)
   const projectWtDir = path.join(wtRoot, project)

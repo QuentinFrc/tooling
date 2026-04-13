@@ -1,58 +1,46 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import * as p from '@clack/prompts'
-import { PROJECTS_DIR, DEFAULT_TARGET } from '../paths.js'
+import { DEFAULT_VOLUME, localClaudeDir } from '../paths.js'
 
 export async function setup(options: { target?: string }) {
-  p.intro('claude-storage setup')
+  const cwd = process.cwd()
+  const project = path.basename(cwd)
+  const sourceDir = localClaudeDir(cwd)
 
-  // 1. Resolve target path
-  const target =
-    options.target ??
-    (await p.text({
-      message: 'Target directory for projects data',
-      defaultValue: DEFAULT_TARGET,
-      placeholder: DEFAULT_TARGET,
-    }))
+  p.intro(`claude-storage setup — ${project}`)
 
-  if (p.isCancel(target)) {
-    p.cancel('Aborted.')
+  // 1. Check .claude exists locally
+  if (!fs.existsSync(sourceDir)) {
+    p.log.error(`No .claude directory found in ${cwd}.\n  Run Claude Code in this directory first.`)
     return
   }
 
-  // 2. Check ~/.claude/projects exists
-  if (!fs.existsSync(PROJECTS_DIR)) {
-    p.log.error(
-      '~/.claude/projects not found. Run Claude Code first to create it.'
-    )
-    return
-  }
-
-  // 3. If already a symlink, show where it points and exit
-  const stat = fs.lstatSync(PROJECTS_DIR)
+  // 2. Already a symlink
+  const stat = fs.lstatSync(sourceDir)
   if (stat.isSymbolicLink()) {
-    const linkTarget = fs.readlinkSync(PROJECTS_DIR)
-    p.log.info(`Already symlinked: ~/.claude/projects -> ${linkTarget}`)
+    const linkTarget = fs.readlinkSync(sourceDir)
+    p.log.info(`Already symlinked: .claude -> ${linkTarget}`)
     p.outro('Nothing to do.')
     return
   }
 
-  // 4. Check target parent directory exists (volume must be mounted)
-  const targetParent = path.dirname(target)
-  if (!fs.existsSync(targetParent)) {
-    p.log.error(
-      `Target parent ${targetParent} not found. Is the volume mounted?`
-    )
+  // 3. Resolve target
+  const volume = options.target ?? DEFAULT_VOLUME
+  const targetDir = path.join(volume, project, '.claude')
+
+  if (!fs.existsSync(volume)) {
+    p.log.error(`Volume ${volume} not found. Is it mounted?`)
     return
   }
 
-  // 5. If target already has data, warn and ask to confirm merge
-  if (fs.existsSync(target)) {
-    const entries = fs.readdirSync(target)
+  // 4. Target already has data
+  if (fs.existsSync(targetDir)) {
+    const entries = fs.readdirSync(targetDir)
     if (entries.length > 0) {
-      p.log.warn(`${target} already exists with ${entries.length} entries.`)
+      p.log.warn(`${targetDir} already exists with ${entries.length} entries.`)
       const confirm = await p.confirm({
-        message: 'Merge current projects into existing target?',
+        message: 'Merge current data into existing target?',
       })
       if (p.isCancel(confirm) || !confirm) {
         p.cancel('Aborted.')
@@ -61,28 +49,28 @@ export async function setup(options: { target?: string }) {
     }
   }
 
-  // 6. Copy ~/.claude/projects to target
+  // 5. Copy
   const spinner = p.spinner()
-  spinner.start('Copying ~/.claude/projects to external volume...')
+  spinner.start('Copying .claude to external volume...')
 
-  fs.mkdirSync(target, { recursive: true })
-  fs.cpSync(PROJECTS_DIR, target, { recursive: true })
+  fs.mkdirSync(targetDir, { recursive: true })
+  fs.cpSync(sourceDir, targetDir, { recursive: true })
 
   spinner.stop('Copied successfully.')
 
-  // 7. Remove original and create symlink
-  spinner.start('Replacing original with symlink...')
+  // 6. Replace with symlink
+  spinner.start('Replacing with symlink...')
 
-  fs.rmSync(PROJECTS_DIR, { recursive: true })
-  fs.symlinkSync(target, PROJECTS_DIR)
+  fs.rmSync(sourceDir, { recursive: true })
+  fs.symlinkSync(targetDir, sourceDir)
 
-  spinner.stop(`Symlinked: ~/.claude/projects -> ${target}`)
+  spinner.stop(`Symlinked: .claude -> ${targetDir}`)
 
-  // 8. Verify the symlink resolves correctly
-  const resolved = fs.realpathSync(PROJECTS_DIR)
-  if (resolved === target) {
-    p.outro('Setup complete. Claude Code will now use the external volume.')
+  // 7. Verify
+  const resolved = fs.realpathSync(sourceDir)
+  if (resolved === targetDir) {
+    p.outro('Done.')
   } else {
-    p.log.error(`Verification failed. Expected ${target}, got ${resolved}`)
+    p.log.error(`Verification failed. Expected ${targetDir}, got ${resolved}`)
   }
 }
