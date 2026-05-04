@@ -11,6 +11,9 @@ import { sync } from './commands/sync.js'
 import { prepare } from './commands/prepare.js'
 import { connect } from './commands/connect.js'
 import { rename } from './commands/rename.js'
+import { agent } from './commands/agent.js'
+import { go } from './commands/go.js'
+import { release } from './commands/release.js'
 
 const program = new Command()
   .name('wt-cli')
@@ -83,5 +86,21 @@ program
   .command('clean')
   .description('Remove pushed + merged + clean worktrees')
   .action(clean)
+
+program
+  .command('agent')
+  .description('Create worktree from a prompt and generate a plan via Claude')
+  .argument('[prompt]', 'Prompt text (opens $EDITOR if omitted)')
+  .action(agent)
+
+program
+  .command('go')
+  .description('Launch interactive Claude in this worktree using the local PLAN.md/AUDIT.md')
+  .action(go)
+
+program
+  .command('release')
+  .description('Commit, push, rebase if behind, create PR, and post a Claude review')
+  .action(release)
 
 program.parse()

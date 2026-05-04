@@ -29,6 +29,9 @@ wt <command> [args]
 | `wt tab [name]`| Open a worktree in a new Ghostty tab       |
 | `wt clean`     | Interactively remove merged/idle/stale worktrees |
 | `wt nuke`      | Remove ALL worktrees across all projects   |
+| `wt agent [prompt]` | Create worktree + plan from a prompt via Claude |
+| `wt go`        | Launch interactive Claude using the local PLAN.md/AUDIT.md |
+| `wt release`   | Commit, push, rebase if behind, open PR, post Claude review |
 
 ## Configuration
 
@@ -36,6 +39,28 @@ wt <command> [args]
 | --------- | ------------------------ | ------------------------ |
 | `WT_ROOT` | `/Volumes/Dev/worktrees` | Root directory for worktrees |
 | `WT_IDE`  | `cursor`                 | Command to open IDE      |
+
+### Agent settings (`.wt.json` → `agent`)
+
+| Field             | Default              | Description                                       |
+| ----------------- | -------------------- | ------------------------------------------------- |
+| `rebaseThreshold` | `0`                  | Rebase if behind target by more than N commits    |
+| `slugModel`       | `claude-sonnet-4-6`  | Model used to pick branch name + kind             |
+| `planModel`       | `claude-opus-4-7`    | Model used to generate `PLAN.md`/`AUDIT.md`       |
+| `prModel`         | `claude-sonnet-4-6`  | Model used to generate commit + PR description    |
+| `reviewModel`     | `claude-opus-4-7`    | Model used to review the PR                       |
+
+`wt agent` requires `claude` on `PATH`. `wt release` requires both `claude` and `gh`.
+
+### Agent flow
+
+```
+wt agent "<prompt>"        # creates worktree, generates PLAN.md/AUDIT.md, cds in
+wt go                      # interactive Claude session implementing the plan
+wt release                 # commit + push + rebase + PR + review comment
+```
+
+`PLAN.md` / `AUDIT.md` are gitignored locally (per-worktree `.git/info/exclude`) and removed by `wt release`.
 
 ## Documentation
 

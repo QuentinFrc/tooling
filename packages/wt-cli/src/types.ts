@@ -29,6 +29,14 @@ export interface Config {
   parentRepo: string
 }
 
+export interface AgentConfig {
+  rebaseThreshold?: number
+  slugModel?: string
+  planModel?: string
+  prModel?: string
+  reviewModel?: string
+}
+
 export interface WtMeta {
   parentRepo: string
   defaultBranch: string
@@ -36,4 +44,5 @@ export interface WtMeta {
   ideDirs: string[]
   prepareCmd?: string
   worktrees: string[]
+  agent?: AgentConfig
 }
