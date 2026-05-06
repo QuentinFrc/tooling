@@ -1,6 +1,6 @@
 # Worktree Classification
 
-`wt clean` classifies each worktree into tiers to decide what can be safely removed. The logic lives in `src/classify.ts`.
+`wt prune` (worktrees scope) classifies each worktree into tiers to decide what can be safely removed. The logic lives in `src/classify.ts`.
 
 ## Tiers
 
@@ -32,16 +32,6 @@ Regular merge detection (`rev-list ref..HEAD --count == 0`) misses squash merges
 
 This is the same algorithm used in the original zsh `_wt_is_merged` function.
 
-## Clean prompt
+## Prune prompt
 
-After classification, `wt clean` presents a cumulative selection:
-
-- If only merged worktrees exist → simple `confirm()` prompt
-- If multiple tiers exist → `select()` with cumulative options:
-  ```
-  [1] Merged only (2)
-  [2] + Idle (3 total)
-  [3] + Stale (5 total)
-  ```
-
-Worktrees in the **kept** category are never proposed for removal.
+After classification, `wt prune` presents a `multiselect()` with one entry per cleanable worktree (merged + idle + stale), pre-checking the merged ones. Worktrees in the **kept** category are never proposed for removal.

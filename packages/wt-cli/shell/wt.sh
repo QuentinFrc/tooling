@@ -15,7 +15,7 @@ wt() {
     local target=$(cat "$tmpfile" 2>/dev/null)
     rm -f "$tmpfile"
     [[ -n "$target" && -d "$target" ]] && cd "$target"
-  elif [[ "$1" == "agent" ]]; then
+  elif [[ "$1" == "agent" || "$1" == "add" || "$1" == "close" ]]; then
     local tmpfile=$(mktemp)
     __WT_CD_TMP="$tmpfile" command wt-cli "$@"
     local target=$(cat "$tmpfile" 2>/dev/null)

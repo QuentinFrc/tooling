@@ -3,10 +3,10 @@ import path from 'node:path'
 import * as p from '@clack/prompts'
 import { resolveConfig, readMeta, addWorktreeToMeta } from '../config.js'
 import * as git from '../git.js'
-import { copyEnvFiles, copyDirs } from '../env.js'
-import { detectPrepareCmd, runPrepare } from './prepare.js'
 import { claudeHeadless, resolveAgentConfig } from '../claude.js'
 import { promptViaEditor } from '../editor.js'
+import { generateSlug } from '../slug.js'
+import { applyMetaToWorktree } from '../setup-worktree.js'
 
 const PLAN_FILES = ['PLAN.md', 'AUDIT.md']
 
@@ -34,29 +34,14 @@ export async function agent(promptArg?: string) {
 
   const slugSpinner = p.spinner()
   slugSpinner.start(`Picking branch name (${ag.slugModel})`)
-  const slugRaw = await claudeHeadless(slugInstruction(userPrompt), {
-    model: ag.slugModel,
-    cwd: config.parentRepo,
-  })
-  slugSpinner.stop('Branch name picked')
+  const { kind, branch, dir } = await generateSlug(userPrompt, ag.slugModel, config.parentRepo)
+  slugSpinner.stop(`Branch: ${branch}`)
 
-  const parsed = parseSlug(slugRaw)
-  if (!parsed) {
-    p.log.error(`Could not parse slug response from Claude:\n${slugRaw}`)
-    process.exit(1)
-  }
-  const { kind, slug } = parsed
-  const prefix = kind === 'audit' ? 'audit' : kind === 'fix' ? 'fix' : 'feat'
-  const branch = `${prefix}/${slug}`
-  const dir = branch.replaceAll('/', '-')
   const wtPath = path.join(config.projectWtDir, dir)
-
   if (fs.existsSync(wtPath)) {
     p.log.error(`Worktree ${dir} already exists at ${wtPath}`)
     process.exit(1)
   }
-
-  p.log.info(`Branch: ${branch}`)
 
   fs.mkdirSync(config.projectWtDir, { recursive: true })
   const baseBranch = meta.defaultBranch ?? 'develop'
@@ -67,23 +52,7 @@ export async function agent(promptArg?: string) {
   wtSpinner.stop('Worktree created')
 
   addWorktreeToMeta(config.projectWtDir, dir)
-
-  if (meta.envFiles?.length) {
-    const copied = copyEnvFiles(config.parentRepo, wtPath, meta.envFiles)
-    if (copied.length) p.log.success(`Copied env: ${copied.join(', ')}`)
-  }
-  if (meta.ideDirs?.length) {
-    const copied = copyDirs(config.parentRepo, wtPath, meta.ideDirs)
-    if (copied.length) p.log.success(`Copied IDE: ${copied.join(', ')}`)
-  }
-
-  const prepareCmd = meta.prepareCmd ?? detectPrepareCmd(config.parentRepo)
-  if (prepareCmd) {
-    const depSpinner = p.spinner()
-    depSpinner.start(`Running ${prepareCmd}`)
-    await runPrepare(wtPath, prepareCmd)
-    depSpinner.stop('Dependencies installed')
-  }
+  await applyMetaToWorktree(meta, config.parentRepo, wtPath)
 
   ensureLocalGitignore(wtPath, PLAN_FILES)
 
@@ -112,17 +81,6 @@ export async function agent(promptArg?: string) {
   }
 }
 
-function slugInstruction(userPrompt: string): string {
-  return `From the user prompt below, output a single JSON object with two fields:
-- "kind": one of "feature", "fix", "audit"
-- "slug": kebab-case branch suffix (max 5 words, [a-z0-9-] only)
-
-Output ONLY the JSON object, no prose, no markdown fences.
-
-PROMPT:
-${userPrompt}`
-}
-
 function planInstruction(kind: 'feature' | 'fix' | 'audit', userPrompt: string, fileName: string): string {
   if (kind === 'audit') {
     return `You are doing a CODE AUDIT. Explore the codebase to answer the user's request. Then write a thorough audit at "${fileName}" at the repo root using the Write tool.
@@ -138,26 +96,6 @@ The plan must be concrete: list files to create/modify, key functions, order of 
 
 USER REQUEST:
 ${userPrompt}`
-}
-
-function parseSlug(raw: string): { kind: 'feature' | 'fix' | 'audit'; slug: string } | null {
-  const cleaned = raw
-    .replace(/^```json\s*/i, '')
-    .replace(/^```\s*/m, '')
-    .replace(/```$/m, '')
-    .trim()
-  const match = cleaned.match(/\{[\s\S]*\}/)
-  if (!match) return null
-  try {
-    const obj = JSON.parse(match[0]) as { kind?: unknown; slug?: unknown }
-    const kind = obj.kind
-    const slug = obj.slug
-    if (kind !== 'feature' && kind !== 'fix' && kind !== 'audit') return null
-    if (typeof slug !== 'string' || !/^[a-z0-9-]+$/.test(slug)) return null
-    return { kind, slug }
-  } catch {
-    return null
-  }
 }
 
 function ensureLocalGitignore(wtPath: string, files: string[]): void {

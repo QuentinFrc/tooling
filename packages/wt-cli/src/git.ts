@@ -156,3 +156,60 @@ export async function isTracked(cwd: string, file: string): Promise<boolean> {
     return false
   }
 }
+
+export interface BranchInfo {
+  name: string
+  upstreamGone: boolean
+  lastCommit: string
+}
+
+export async function branchListAll(cwd: string): Promise<BranchInfo[]> {
+  const { stdout } = await execa(
+    'git',
+    [
+      'for-each-ref',
+      '--format=%(refname:short)\t%(upstream:track)\t%(committerdate:relative)',
+      'refs/heads/',
+    ],
+    { cwd },
+  )
+  return stdout
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const [name = '', track = '', lastCommit = ''] = line.split('\t')
+      return { name, upstreamGone: track === '[gone]', lastCommit }
+    })
+}
+
+export async function branchListMerged(cwd: string, ref: string): Promise<string[]> {
+  try {
+    const { stdout } = await execa(
+      'git',
+      ['branch', '--format=%(refname:short)', '--merged', ref],
+      { cwd },
+    )
+    return stdout.split('\n').map((l) => l.trim()).filter(Boolean)
+  } catch {
+    return []
+  }
+}
+
+export async function worktreeBranchMap(cwd: string): Promise<Record<string, string>> {
+  const { stdout } = await execa('git', ['worktree', 'list', '--porcelain'], { cwd })
+  const map: Record<string, string> = {}
+  let curPath = ''
+  for (const line of stdout.split('\n')) {
+    if (line.startsWith('worktree ')) curPath = line.slice('worktree '.length)
+    else if (line.startsWith('branch ')) {
+      const ref = line.slice('branch '.length)
+      const name = ref.replace(/^refs\/heads\//, '')
+      map[name] = curPath
+    }
+  }
+  return map
+}
+
+export async function branchDelete(cwd: string, name: string, force = false): Promise<void> {
+  await execa('git', ['branch', force ? '-D' : '-d', name], { cwd })
+}

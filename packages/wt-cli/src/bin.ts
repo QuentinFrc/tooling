@@ -6,14 +6,16 @@ import { ls } from './commands/ls.js'
 import { cd } from './commands/cd.js'
 import { root } from './commands/root.js'
 import { ide } from './commands/ide.js'
-import { clean } from './commands/clean.js'
 import { sync } from './commands/sync.js'
 import { prepare } from './commands/prepare.js'
-import { connect } from './commands/connect.js'
 import { rename } from './commands/rename.js'
 import { agent } from './commands/agent.js'
 import { go } from './commands/go.js'
 import { release } from './commands/release.js'
+import { followup } from './commands/followup.js'
+import { close } from './commands/close.js'
+import { scan } from './commands/scan.js'
+import { prune } from './commands/prune.js'
 
 const program = new Command()
   .name('wt-cli')
@@ -28,8 +30,8 @@ program
 
 program
   .command('add')
-  .description('Create a new worktree with a new branch')
-  .argument('<branch>', 'Branch name')
+  .description('Create a new worktree from a prompt (Claude picks the branch name)')
+  .argument('[prompt]', 'Prompt text (opens $EDITOR if omitted)')
   .action(add)
 
 program
@@ -72,9 +74,9 @@ program
   .action(prepare)
 
 program
-  .command('connect')
-  .description('Connect an orphan worktree to wt-cli')
-  .action(connect)
+  .command('scan')
+  .description('Reconcile git worktrees with .wt.json (adopt orphans, drop stale entries)')
+  .action(scan)
 
 program
   .command('rename')
@@ -83,9 +85,11 @@ program
   .action(rename)
 
 program
-  .command('clean')
-  .description('Remove pushed + merged + clean worktrees')
-  .action(clean)
+  .command('prune')
+  .description('Interactively prune worktrees and/or local branches')
+  .option('--no-worktrees', 'Skip worktree pruning')
+  .option('--no-branches', 'Skip branch pruning')
+  .action(prune)
 
 program
   .command('agent')
@@ -102,5 +106,18 @@ program
   .command('release')
   .description('Commit, push, rebase if behind, create PR, and post a Claude review')
   .action(release)
+
+program
+  .command('followup')
+  .description('Launch interactive Claude with PR reviews + comments to address them')
+  .action(followup)
+
+program
+  .command('close')
+  .description('Merge the PR, remove the worktree, and cd back to main repo')
+  .option('--squash', 'Squash merge (default)')
+  .option('--merge', 'Merge commit')
+  .option('--rebase', 'Rebase merge')
+  .action(close)
 
 program.parse()

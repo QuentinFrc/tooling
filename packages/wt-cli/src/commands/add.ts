@@ -3,17 +3,17 @@ import path from 'node:path'
 import * as p from '@clack/prompts'
 import { resolveConfig, readMeta, writeMeta, addWorktreeToMeta } from '../config.js'
 import * as git from '../git.js'
-import { copyEnvFiles, copyDirs } from '../env.js'
-import { detectPrepareCmd, runPrepare } from './prepare.js'
+import { resolveAgentConfig } from '../claude.js'
+import { promptViaEditor } from '../editor.js'
+import { generateSlug } from '../slug.js'
+import { applyMetaToWorktree } from '../setup-worktree.js'
 
-export async function add(branch: string) {
+export async function add(promptArg?: string) {
   const config = await resolveConfig()
-  const dir = branch.replaceAll('/', '-')
-  const wtPath = path.join(config.projectWtDir, dir)
 
-  fs.mkdirSync(config.projectWtDir, { recursive: true })
-  const meta = readMeta(config.projectWtDir)
+  let meta = readMeta(config.projectWtDir)
   if (!meta) {
+    fs.mkdirSync(config.projectWtDir, { recursive: true })
     writeMeta(config.projectWtDir, {
       parentRepo: config.parentRepo,
       defaultBranch: 'develop',
@@ -21,39 +21,44 @@ export async function add(branch: string) {
       ideDirs: [],
       worktrees: [],
     })
+    meta = readMeta(config.projectWtDir)!
   }
 
-  const baseBranch = meta?.defaultBranch ?? 'develop'
+  let userPrompt: string
+  if (promptArg && promptArg.trim()) {
+    userPrompt = promptArg.trim()
+  } else {
+    const fromEditor = await promptViaEditor()
+    if (!fromEditor) {
+      p.log.warn('Empty prompt — aborting.')
+      process.exit(1)
+    }
+    userPrompt = fromEditor
+  }
 
-  const s = p.spinner()
-  s.start(`Creating worktree ${dir}`)
-  await git.worktreeAdd(process.cwd(), wtPath, branch, baseBranch)
-  s.stop(`Worktree created at ${wtPath}`)
+  const ag = resolveAgentConfig(meta)
+  const slugSpinner = p.spinner()
+  slugSpinner.start(`Picking branch name (${ag.slugModel})`)
+  const { branch, dir } = await generateSlug(userPrompt, ag.slugModel, config.parentRepo)
+  slugSpinner.stop(`Branch: ${branch}`)
+
+  const wtPath = path.join(config.projectWtDir, dir)
+  if (fs.existsSync(wtPath)) {
+    p.log.error(`Worktree ${dir} already exists at ${wtPath}`)
+    process.exit(1)
+  }
+
+  const baseBranch = meta.defaultBranch ?? 'develop'
+
+  const wtSpinner = p.spinner()
+  wtSpinner.start(`Creating worktree at ${wtPath}`)
+  await git.worktreeAdd(config.parentRepo, wtPath, branch, baseBranch)
+  wtSpinner.stop('Worktree created')
 
   addWorktreeToMeta(config.projectWtDir, dir)
+  await applyMetaToWorktree(meta, config.parentRepo, wtPath)
 
-  const meta2 = readMeta(config.projectWtDir)
-  const envFiles = meta2?.envFiles ?? []
-  if (envFiles.length > 0) {
-    const copied = copyEnvFiles(config.parentRepo, wtPath, envFiles)
-    if (copied.length > 0) {
-      p.log.success(`Copied ${copied.join(', ')} to worktree`)
-    }
-  }
-
-  const ideDirs = meta2?.ideDirs ?? []
-  if (ideDirs.length > 0) {
-    const copied = copyDirs(config.parentRepo, wtPath, ideDirs)
-    if (copied.length > 0) {
-      p.log.success(`Copied ${copied.join(', ')} to worktree`)
-    }
-  }
-
-  const prepareCmd = meta2?.prepareCmd ?? detectPrepareCmd(config.parentRepo)
-  if (prepareCmd) {
-    const s2 = p.spinner()
-    s2.start(`Running ${prepareCmd}`)
-    await runPrepare(wtPath, prepareCmd)
-    s2.stop('Dependencies installed')
-  }
+  const tmpFile = process.env.__WT_CD_TMP
+  if (tmpFile) fs.writeFileSync(tmpFile, wtPath)
+  p.log.success(`Worktree ready: ${wtPath}`)
 }

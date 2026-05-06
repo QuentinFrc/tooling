@@ -20,18 +20,21 @@ wt <command> [args]
 | Command        | Description                                |
 | -------------- | ------------------------------------------ |
 | `wt setup`     | Create project folder on WT_ROOT           |
-| `wt add <branch>` | Create a new worktree with a new branch |
+| `wt add [prompt]` | Create a new worktree (Claude picks the branch from your prompt; opens `$EDITOR` if no prompt) |
 | `wt rm [name]` | Remove a worktree (interactive if no name) |
 | `wt ls`        | List worktrees with metadata               |
 | `wt cd [name]` | Navigate to a worktree                     |
 | `wt root`      | Go back to the main repo                   |
 | `wt ide [name]`| Open a worktree in IDE                     |
 | `wt tab [name]`| Open a worktree in a new Ghostty tab       |
-| `wt clean`     | Interactively remove merged/idle/stale worktrees |
 | `wt nuke`      | Remove ALL worktrees across all projects   |
+| `wt scan`      | Reconcile git worktrees with `.wt.json` (adopt orphans, drop stale entries) |
+| `wt prune`     | Interactively prune worktrees and/or local branches (`--no-worktrees`, `--no-branches`) |
 | `wt agent [prompt]` | Create worktree + plan from a prompt via Claude |
 | `wt go`        | Launch interactive Claude using the local PLAN.md/AUDIT.md |
 | `wt release`   | Commit, push, rebase if behind, open PR, post Claude review |
+| `wt followup`  | Pull PR reviews + comments, launch interactive Claude to address them |
+| `wt close`     | Merge the PR, remove the worktree, and cd back to main repo |
 
 ## Configuration
 
@@ -50,14 +53,17 @@ wt <command> [args]
 | `prModel`         | `claude-sonnet-4-6`  | Model used to generate commit + PR description    |
 | `reviewModel`     | `claude-opus-4-7`    | Model used to review the PR                       |
 
-`wt agent` requires `claude` on `PATH`. `wt release` requires both `claude` and `gh`.
+`wt add` and `wt agent` require `claude` on `PATH`. `wt release` requires both `claude` and `gh`.
 
 ### Agent flow
 
 ```
 wt agent "<prompt>"        # creates worktree, generates PLAN.md/AUDIT.md, cds in
 wt go                      # interactive Claude session implementing the plan
-wt release                 # commit + push + rebase + PR + review comment
+wt release                 # commit + push + rebase + PR + Claude self-review comment
+wt followup                # interactive Claude to address PR reviews/comments
+wt release                 # push the follow-up + new self-review
+wt close                   # merge PR + remove worktree + cd back to main repo
 ```
 
 `PLAN.md` / `AUDIT.md` are gitignored locally (per-worktree `.git/info/exclude`) and removed by `wt release`.
