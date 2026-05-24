@@ -1,0 +1,23 @@
+{
+  "name": "repo-report",
+  "version": "1.0.0",
+  "type": "module",
+  "bin": {
+    "repo-report": "./dist/bin.js"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "link:install": "pnpm build && npm i -g ."
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.10",
+    "commander": "^13",
+    "execa": "^9"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "tsup": "^8",
+    "typescript": "^5.7"
+  }
+}

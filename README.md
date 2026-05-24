@@ -13,7 +13,9 @@ Internal monorepo for CLI tools and shared packages.
 
 ```
 packages/
-  wt-cli/    # Git worktree manager
+  wt-cli/        # Git worktree manager
+  claude-cli/    # Claude helpers
+  repo-report/   # Monorepo dependency + stats report generator
 ```
 
 All packages (shared libraries and CLIs) live under `packages/`.
