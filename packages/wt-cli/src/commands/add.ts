@@ -3,12 +3,9 @@ import path from 'node:path'
 import * as p from '@clack/prompts'
 import { resolveConfig, readMeta, writeMeta, addWorktreeToMeta } from '../config.js'
 import * as git from '../git.js'
-import { resolveAgentConfig } from '../claude.js'
-import { promptViaEditor } from '../editor.js'
-import { generateSlug } from '../slug.js'
 import { applyMetaToWorktree } from '../setup-worktree.js'
 
-export async function add(promptArg?: string) {
+export async function add(nameArg?: string) {
   const config = await resolveConfig()
 
   let meta = readMeta(config.projectWtDir)
@@ -17,30 +14,31 @@ export async function add(promptArg?: string) {
     writeMeta(config.projectWtDir, {
       parentRepo: config.parentRepo,
       defaultBranch: 'develop',
-      envFiles: [],
-      ideDirs: [],
+      copy: [],
       worktrees: [],
     })
     meta = readMeta(config.projectWtDir)!
   }
 
-  let userPrompt: string
-  if (promptArg && promptArg.trim()) {
-    userPrompt = promptArg.trim()
+  let rawName: string
+  if (nameArg && nameArg.trim()) {
+    rawName = nameArg
   } else {
-    const fromEditor = await promptViaEditor()
-    if (!fromEditor) {
-      p.log.warn('Empty prompt — aborting.')
+    const answer = await p.text({
+      message: 'Branch name',
+      placeholder: 'feat/my-thing',
+      validate: (v) => (v.trim() ? undefined : 'Name is required'),
+    })
+    if (p.isCancel(answer)) {
+      p.log.info('Cancelled.')
       process.exit(1)
     }
-    userPrompt = fromEditor
+    rawName = answer
   }
 
-  const ag = resolveAgentConfig(meta)
-  const slugSpinner = p.spinner()
-  slugSpinner.start(`Picking branch name (${ag.slugModel})`)
-  const { branch, dir } = await generateSlug(userPrompt, ag.slugModel, config.parentRepo)
-  slugSpinner.stop(`Branch: ${branch}`)
+  // Branch keeps slashes (e.g. feat/foo); dir flattens them. Whitespace → dash.
+  const branch = rawName.trim().replace(/\s+/g, '-')
+  const dir = branch.replaceAll('/', '-')
 
   const wtPath = path.join(config.projectWtDir, dir)
   if (fs.existsSync(wtPath)) {
@@ -51,9 +49,21 @@ export async function add(promptArg?: string) {
   const baseBranch = meta.defaultBranch ?? 'develop'
 
   const wtSpinner = p.spinner()
-  wtSpinner.start(`Creating worktree at ${wtPath}`)
-  await git.worktreeAdd(config.parentRepo, wtPath, branch, baseBranch)
-  wtSpinner.stop('Worktree created')
+  wtSpinner.start('Fetching origin')
+  try {
+    await git.fetch(config.parentRepo)
+  } catch {
+    wtSpinner.message('Fetch failed (offline?) — using local refs')
+  }
+  wtSpinner.message(`Creating worktree at ${wtPath}`)
+  const result = await git.worktreeAdd(config.parentRepo, wtPath, branch, baseBranch)
+  const doneMsg: Record<git.WorktreeAddResult, string> = {
+    created: `Created ${branch} from ${baseBranch}`,
+    existing: `Checked out existing branch ${branch}`,
+    'existing-updated': `Checked out ${branch} (fast-forwarded to origin/${branch})`,
+    remote: `Checked out ${branch} from origin/${branch}`,
+  }
+  wtSpinner.stop(doneMsg[result])
 
   addWorktreeToMeta(config.projectWtDir, dir)
   await applyMetaToWorktree(meta, config.parentRepo, wtPath)

@@ -5,6 +5,9 @@ import { classifyWorktrees } from '../classify.js'
 import * as git from '../git.js'
 import type { ClassifiedWorktree, Config } from '../types.js'
 
+/** Branches that must never be pruned, regardless of merge state. */
+const PROTECTED_BRANCHES = new Set(['main', 'master', 'dev', 'develop'])
+
 export interface PruneOpts {
   worktrees?: boolean
   branches?: boolean
@@ -78,7 +81,16 @@ async function pruneWorktrees(config: Config, _target: string) {
     )
   }
 
-  const cleanable: ClassifiedWorktree[] = [...result.merged, ...result.idle, ...result.stale]
+  const all: ClassifiedWorktree[] = [...result.merged, ...result.idle, ...result.stale]
+  const shielded = all.filter((wt) => PROTECTED_BRANCHES.has(wt.branch))
+  if (shielded.length > 0) {
+    p.log.info(
+      `Protected (${shielded.length}):\n` +
+        shielded.map((w) => `  ${w.name} (${w.branch})`).join('\n'),
+    )
+  }
+
+  const cleanable = all.filter((wt) => !PROTECTED_BRANCHES.has(wt.branch))
   if (cleanable.length === 0) {
     p.log.info('No prunable worktrees.')
     return
@@ -129,6 +141,7 @@ async function pruneBranches(cwd: string, target: string) {
   s.stop('Branches scanned')
 
   const candidates = all
+    .filter((b) => !PROTECTED_BRANCHES.has(b.name))
     .filter((b) => b.name !== target)
     .filter((b) => b.name !== current)
     .filter((b) => !wtBranches[b.name])

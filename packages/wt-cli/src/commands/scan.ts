@@ -1,7 +1,9 @@
+import fs from 'node:fs'
 import path from 'node:path'
 import * as p from '@clack/prompts'
 import { resolveConfig, readMeta, addWorktreeToMeta, removeWorktreeFromMeta } from '../config.js'
 import * as git from '../git.js'
+import { detectPrepareCmd, runPrepare } from '../prepare.js'
 
 export async function scan() {
   p.intro('wt scan')
@@ -65,11 +67,41 @@ export async function scan() {
   }
 
   if (external.length > 0) {
-    p.log.warn(
-      `${external.length} worktree(s) live outside ${config.projectWtDir}:\n` +
-        external.map((wp) => `  ${wp}`).join('\n') +
-        `\n(not adopted — move under WT_ROOT and re-run scan)`,
-    )
+    p.log.warn(`${external.length} worktree(s) live outside ${config.projectWtDir}`)
+    const sel = await p.multiselect({
+      message: 'Move external worktree(s) under WT_ROOT? (none selected by default)',
+      options: external.map((wp) => ({ value: wp, label: wp })),
+      initialValues: [],
+      required: false,
+    })
+    if (!p.isCancel(sel)) {
+      for (const wp of sel as string[]) {
+        const branch = await git.branchCurrent(wp)
+        const dir = (branch ?? path.basename(wp)).replaceAll('/', '-')
+        const dest = path.join(config.projectWtDir, dir)
+        if (fs.existsSync(dest)) {
+          p.log.error(`${dest} already exists — skipped ${wp}`)
+          continue
+        }
+        try {
+          const crossDevice = await git.worktreeMove(config.parentRepo, wp, dest)
+          addWorktreeToMeta(config.projectWtDir, dir)
+          p.log.success(`Moved ${wp} → ${dest}`)
+          if (crossDevice) {
+            const prepareCmd = meta.prepareCmd ?? detectPrepareCmd(config.parentRepo)
+            if (prepareCmd) {
+              const s = p.spinner()
+              s.start(`Running ${prepareCmd}`)
+              await runPrepare(dest, prepareCmd)
+              s.stop('Dependencies installed')
+            }
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err)
+          p.log.error(`Could not move ${wp}: ${msg}`)
+        }
+      }
+    }
   }
 
   p.outro('Scan complete.')

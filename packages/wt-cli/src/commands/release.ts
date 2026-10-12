@@ -5,6 +5,7 @@ import { execa } from 'execa'
 import { resolveConfig, readMeta } from '../config.js'
 import * as git from '../git.js'
 import { claudeHeadless, resolveAgentConfig } from '../claude.js'
+import { resolveWithClaude } from './rebase.js'
 
 const PLAN_FILES = ['PLAN.md', 'AUDIT.md']
 const DIFF_TRUNCATE = 16000
@@ -58,22 +59,26 @@ export async function release() {
 
   await git.fetch(cwd)
   const behind = await git.revListCount(cwd, `HEAD..origin/${target}`)
-  let didRebase = false
   if (behind > ag.rebaseThreshold) {
     p.log.warn(`Branch is behind origin/${target} by ${behind} commits — rebasing`)
     try {
       await execa('git', ['rebase', `origin/${target}`], { cwd, stdio: 'inherit' })
-      didRebase = true
     } catch {
-      p.log.error('Rebase had conflicts — resolve manually then re-run')
-      process.exit(1)
+      const done = await resolveWithClaude(cwd, target, ag.planModel)
+      if (!done) {
+        p.log.error('Rebase still has conflicts — run `wt rebase` to finish, then re-run `wt release`.')
+        process.exit(1)
+      }
     }
   }
 
   const hadUpstream = await git.hasUpstream(cwd)
   if (hadUpstream) {
+    // Force-with-lease whenever local has diverged from upstream (e.g. a rebase
+    // rewrote history here or via an earlier `wt rebase`), so the push isn't rejected.
+    const diverged = (await git.revListCount(cwd, 'HEAD..@{u}')) > 0
     const args = ['push']
-    if (didRebase) args.push('--force-with-lease')
+    if (diverged) args.push('--force-with-lease')
     await execa('git', args, { cwd, stdio: 'inherit' })
   } else {
     await execa('git', ['push', '-u', 'origin', branch], { cwd, stdio: 'inherit' })
@@ -134,31 +139,11 @@ ${prLog}`,
       throw err
     }
   }
-  if (prUrl) createSpinner.stop(`PR: ${prUrl}`)
-
-  const reviewSpinner = p.spinner()
-  reviewSpinner.start(`Reviewing PR (${ag.reviewModel})`)
-  const fullDiff = (await execa('git', ['diff', `origin/${target}...HEAD`], { cwd })).stdout.slice(0, DIFF_TRUNCATE * 2)
-  const review = await claudeHeadless(
-    `Review this pull request. Output ONLY the review markdown, no preamble.
-
-Cover: strengths, concerns (with file:line references when possible), and concrete suggestions. Be terse and specific.
-
-DIFF STAT:
-${prDiffStat}
-
-DIFF (truncated):
-${fullDiff}`,
-    { model: ag.reviewModel, cwd },
-  )
-  reviewSpinner.stop('Review ready')
-
   if (prUrl) {
-    await execa('gh', ['pr', 'comment', prUrl, '--body', `## Self-review (Claude)\n\n${review}`], { cwd })
-    p.log.success(`Review posted on ${prUrl}`)
+    createSpinner.stop(`PR: ${prUrl}`)
+    p.log.success('Released. Run `wt review` to post a Claude self-review.')
   } else {
-    p.log.warn('No PR URL — printing review:')
-    p.log.message(review)
+    createSpinner.stop('PR ready')
   }
 }
 

@@ -38,40 +38,29 @@ async function diffLabel(wtPath: string, ref: string): Promise<string> {
 
 interface WtSummary {
   name: string
-  branch: string
   dirty: string
   pushed: string
   diff: string
-  lastDate: string
-  lastMsg: string
 }
 
 async function summarize(wtPath: string, name: string, defaultBranch: string): Promise<WtSummary> {
-  // Parallel: independent git calls
-  const [branch, changes, hasUp, diff, last] = await Promise.all([
-    git.branchCurrent(wtPath),
+  const [changes, hasUp, diff] = await Promise.all([
     git.statusPorcelain(wtPath),
     git.hasUpstream(wtPath),
     diffLabel(wtPath, defaultBranch),
-    git.lastCommit(wtPath),
   ])
 
-  let pushed: string
+  let pushed = 'no remote'
   if (hasUp) {
     const ahead = await git.revListCount(wtPath, '@{u}..HEAD')
     pushed = ahead === 0 ? 'pushed' : `${ahead} to push`
-  } else {
-    pushed = 'no remote'
   }
 
   return {
     name,
-    branch: branch ?? '(detached)',
     dirty: changes > 0 ? `${changes} dirty` : 'clean',
     pushed,
     diff,
-    lastDate: last.date,
-    lastMsg: last.message,
   }
 }
 
@@ -97,14 +86,11 @@ export async function ls() {
     return summarize(wtPath, name, defaultBranch)
   })
 
-  for (const s of summaries) {
-    p.note(
-      [
-        `${s.dirty}  |  ${s.pushed}`,
-        `${defaultBranch}: ${s.diff}`,
-        `${s.lastDate} — ${s.lastMsg}`,
-      ].join('\n'),
-      `${s.name} (${s.branch})`
-    )
-  }
+  const nameW = Math.max(...summaries.map((s) => s.name.length))
+  const diffW = Math.max(...summaries.map((s) => s.diff.length))
+  const dirtyW = Math.max(...summaries.map((s) => s.dirty.length))
+  const lines = summaries.map(
+    (s) => `${s.name.padEnd(nameW)}  ${s.diff.padEnd(diffW)}  ${s.dirty.padEnd(dirtyW)}  ${s.pushed}`,
+  )
+  p.log.message(lines.join('\n'))
 }

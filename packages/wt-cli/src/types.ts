@@ -40,8 +40,12 @@ export interface AgentConfig {
 export interface WtMeta {
   parentRepo: string
   defaultBranch: string
-  envFiles: string[]
-  ideDirs: string[]
+  /** Glob patterns (relative to the main repo) copied into each worktree on creation and via `wt copy`. */
+  copy?: string[]
+  /** @deprecated Legacy fields — migrated into `copy` by resolveCopyPatterns(). */
+  envFiles?: string[]
+  /** @deprecated Legacy fields — migrated into `copy` by resolveCopyPatterns(). */
+  ideDirs?: string[]
   prepareCmd?: string
   worktrees: string[]
   agent?: AgentConfig

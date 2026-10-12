@@ -37,18 +37,64 @@ export async function fetch(cwd: string): Promise<void> {
   await execa('git', ['fetch', '--quiet'], { cwd })
 }
 
+/** Detect an interrupted rebase (conflict resolution pending) in this worktree. */
+export async function rebaseInProgress(cwd: string): Promise<boolean> {
+  for (const dir of ['rebase-merge', 'rebase-apply']) {
+    const { stdout } = await execa('git', ['rev-parse', '--git-path', dir], { cwd })
+    if (fs.existsSync(path.resolve(cwd, stdout.trim()))) return true
+  }
+  return false
+}
+
 export async function worktreePrune(cwd: string): Promise<void> {
   await execa('git', ['worktree', 'prune'], { cwd })
 }
 
-export async function worktreeAdd(cwd: string, wtPath: string, branch: string, startPoint?: string): Promise<void> {
-  const exists = await refExists(cwd, branch)
-  if (exists) {
+export type WorktreeAddResult = 'created' | 'existing' | 'existing-updated' | 'remote'
+
+/**
+ * Check out `branch` into a new worktree, reusing the freshest version of it:
+ * an existing local branch is fast-forwarded to origin when possible (kept
+ * as-is when diverged or ahead), a remote-only branch is checked out with
+ * tracking, and otherwise a new branch is created from `startPoint`.
+ * Callers should fetch first for the origin refs to be current.
+ */
+export async function worktreeAdd(
+  cwd: string,
+  wtPath: string,
+  branch: string,
+  startPoint?: string,
+): Promise<WorktreeAddResult> {
+  const localRef = `refs/heads/${branch}`
+  const remoteRef = `refs/remotes/origin/${branch}`
+
+  if (await refExists(cwd, localRef)) {
+    let updated = false
+    if ((await refExists(cwd, remoteRef)) && (await isAncestor(cwd, localRef, remoteRef))) {
+      await execa('git', ['branch', '-f', branch, remoteRef], { cwd })
+      updated = true
+    }
     await execa('git', ['worktree', 'add', wtPath, branch], { cwd })
-  } else {
-    const args = ['worktree', 'add', wtPath, '-b', branch]
-    if (startPoint) args.push(startPoint)
-    await execa('git', args, { cwd })
+    return updated ? 'existing-updated' : 'existing'
+  }
+
+  if (await refExists(cwd, remoteRef)) {
+    await execa('git', ['worktree', 'add', wtPath, '--track', '-b', branch, `origin/${branch}`], { cwd })
+    return 'remote'
+  }
+
+  const args = ['worktree', 'add', wtPath, '-b', branch]
+  if (startPoint) args.push(startPoint)
+  await execa('git', args, { cwd })
+  return 'created'
+}
+
+export async function isAncestor(cwd: string, ancestor: string, descendant: string): Promise<boolean> {
+  try {
+    await execa('git', ['merge-base', '--is-ancestor', ancestor, descendant], { cwd })
+    return true
+  } catch {
+    return false
   }
 }
 
@@ -69,6 +115,37 @@ export async function worktreeRemove(wtPath: string, cwd?: string): Promise<void
     } catch {
       // branch might already be gone or is checked out elsewhere
     }
+  }
+}
+
+/** Remove every node_modules directory in the tree (never descends into .git). */
+function removeNodeModulesDirs(root: string): void {
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    if (!entry.isDirectory() || entry.name === '.git') continue
+    const p = path.join(root, entry.name)
+    if (entry.name === 'node_modules') fs.rmSync(p, { recursive: true, force: true })
+    else removeNodeModulesDirs(p)
+  }
+}
+
+/** Returns true when the move crossed devices (dependencies were dropped and need reinstalling). */
+export async function worktreeMove(cwd: string, from: string, to: string): Promise<boolean> {
+  try {
+    await execa('git', ['worktree', 'move', from, to], { cwd })
+    return false
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    // `git worktree move` relies on rename(2), which fails with EXDEV when
+    // WT_ROOT lives on another volume. Copy + delete, then let git repair the
+    // gitdir pointer (.git/worktrees/<id>/gitdir) to the new location.
+    // node_modules is dropped first: copying it cross-device is slow and
+    // breaks pnpm's hardlinks to the store — the caller reinstalls instead.
+    if (!/cross-device/i.test(msg)) throw err
+    removeNodeModulesDirs(from)
+    fs.cpSync(from, to, { recursive: true, verbatimSymlinks: true })
+    fs.rmSync(from, { recursive: true, force: true })
+    await execa('git', ['worktree', 'repair', to], { cwd })
+    return true
   }
 }
 
@@ -146,6 +223,16 @@ export async function lastCommit(cwd: string): Promise<{ date: string; message: 
 export async function revParseTree(cwd: string, ref: string): Promise<string> {
   const { stdout } = await execa('git', ['rev-parse', `${ref}^{tree}`], { cwd })
   return stdout.trim()
+}
+
+/** Paths git does not track: untracked files + ignored files, with fully-ignored directories collapsed to `dir/`. */
+export async function lsOthers(cwd: string): Promise<string[]> {
+  const [untracked, ignored] = await Promise.all([
+    execa('git', ['ls-files', '--others', '--exclude-standard'], { cwd }),
+    execa('git', ['ls-files', '--others', '--ignored', '--exclude-standard', '--directory'], { cwd }),
+  ])
+  const all = [...untracked.stdout.split('\n'), ...ignored.stdout.split('\n')]
+  return [...new Set(all.filter(Boolean))]
 }
 
 export async function isTracked(cwd: string, file: string): Promise<boolean> {

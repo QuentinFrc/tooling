@@ -58,6 +58,11 @@ export async function followup() {
   }
   s.stop(`PR #${pr.number} fetched (${pr.reviews.length} review(s), ${pr.comments.length} comment(s), ${inline.length} inline)`)
 
+  if (pr.reviews.length === 0 && pr.comments.length === 0 && inline.length === 0) {
+    p.log.info(`Nothing to address on PR #${pr.number} yet.`)
+    return
+  }
+
   const context = formatContext(pr, inline)
   const initial = `You are picking up a pull request to address review feedback.
 
@@ -67,10 +72,12 @@ State: ${pr.state}
 
 ${context}
 
-Read everything above. Then:
-1. Summarize what needs to be addressed (group related items).
-2. Propose an ordered plan of action.
-3. Wait for my confirmation before making changes — we will iterate together.`
+Read everything above. The feedback may be purely approving or have no concrete change requests — do not invent work. First arbitrate:
+
+1. Decide whether there is anything actionable. If the reviews/comments are all positive, informational, or already resolved, say so plainly and stop — no plan, no changes.
+2. Otherwise, summarize what actually needs to be addressed (group related items) and skip anything that doesn't warrant a change.
+3. Propose an ordered plan of action.
+4. Wait for my confirmation before making changes — we will iterate together.`
 
   await claudeInteractive(initial, { cwd, model: ag.planModel })
 }

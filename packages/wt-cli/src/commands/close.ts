@@ -1,9 +1,8 @@
-import fs from 'node:fs'
 import path from 'node:path'
 import * as p from '@clack/prompts'
 import { execa } from 'execa'
-import { resolveConfig, readMeta, removeWorktreeFromMeta } from '../config.js'
-import * as git from '../git.js'
+import { resolveConfig, readMeta } from '../config.js'
+import { removeWorktreeLocal } from '../remove.js'
 
 type Strategy = 'squash' | 'merge' | 'rebase'
 
@@ -71,22 +70,8 @@ export async function close(opts: CloseOpts) {
   }
 
   const wtName = path.relative(config.projectWtDir, cwd).split(path.sep)[0]
-  const wtPath = path.join(config.projectWtDir, wtName)
+  await removeWorktreeLocal(config, wtName, { cdBack: true })
 
   const tmpFile = process.env.__WT_CD_TMP
-  if (tmpFile) fs.writeFileSync(tmpFile, config.parentRepo)
-
-  const s2 = p.spinner()
-  s2.start(`Removing worktree ${wtName}`)
-  await git.worktreeRemove(wtPath, config.parentRepo)
-  removeWorktreeFromMeta(config.projectWtDir, wtName)
-  s2.stop(`Removed worktree ${wtName}`)
-
-  try {
-    fs.rmdirSync(config.projectWtDir)
-  } catch {
-    // not empty, fine
-  }
-
   p.log.success(`Closed. ${tmpFile ? 'Returning to main repo.' : `cd ${config.parentRepo}`}`)
 }
