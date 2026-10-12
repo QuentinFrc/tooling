@@ -4,6 +4,8 @@ import * as p from '@clack/prompts'
 import { resolveConfig, readMeta, addWorktreeToMeta, removeWorktreeFromMeta } from '../config.js'
 import * as git from '../git.js'
 import { detectPrepareCmd, runPrepare } from '../prepare.js'
+import { listOpenPrs, createPrWorktree, type OpenPr } from './sync-pr.js'
+import type { Config, WtMeta } from '../types.js'
 
 export async function scan() {
   p.intro('wt scan')
@@ -36,8 +38,7 @@ export async function scan() {
   }
 
   if (orphans.length === 0 && stale.length === 0 && external.length === 0) {
-    p.outro('All worktrees are in sync.')
-    return
+    p.log.info('Local worktrees are in sync.')
   }
 
   if (orphans.length > 0) {
@@ -104,5 +105,47 @@ export async function scan() {
     }
   }
 
+  await offerPrWorktrees(config, meta)
+
   p.outro('Scan complete.')
+}
+
+/** Opt-in: create worktrees for open PRs that have none. Silently skipped without gh / GitHub remote. */
+async function offerPrWorktrees(config: Config, meta: WtMeta) {
+  const s = p.spinner()
+  s.start('Checking open PRs')
+  let prs: OpenPr[]
+  try {
+    prs = await listOpenPrs(config.parentRepo)
+  } catch {
+    s.stop('Open PRs unavailable (no gh or no GitHub remote) — skipped')
+    return
+  }
+  const checkedOut = await git.worktreeBranchMap(config.parentRepo)
+  const missing = prs.filter((pr) => !pr.isCrossRepository && !checkedOut[pr.headRefName])
+  s.stop(missing.length ? `${missing.length} open PR(s) without a worktree` : 'Every open PR has a worktree')
+  if (missing.length === 0) return
+
+  const sel = await p.multiselect({
+    message: 'Create worktree(s) for open PRs? (none selected by default)',
+    options: missing.map((pr) => ({ value: pr.number, label: `#${pr.number} ${pr.headRefName}`, hint: pr.title })),
+    initialValues: [],
+    required: false,
+  })
+  if (p.isCancel(sel) || (sel as number[]).length === 0) return
+
+  const fetchSpinner = p.spinner()
+  fetchSpinner.start('Fetching origin')
+  await git.fetch(config.parentRepo)
+  fetchSpinner.stop('Fetched')
+
+  for (const pr of missing.filter((pr) => (sel as number[]).includes(pr.number))) {
+    const label = `#${pr.number} ${pr.headRefName}`
+    try {
+      await createPrWorktree(config, meta, pr, label)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      p.log.error(`${label}: ${msg}`)
+    }
+  }
 }

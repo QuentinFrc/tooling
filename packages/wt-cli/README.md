@@ -26,7 +26,9 @@ wt <command> [args]
 | `wt cd [name]` | Navigate to a worktree                     |
 | `wt root`      | Go back to the main repo                   |
 | `wt copy [name]` | Copy configured files (env vars, etc.) from the main repo into worktrees (`--add <pattern>`, `--list`) |
-| `wt scan`      | Reconcile git worktrees with `.wt.json` (adopt orphans, drop stale entries, offer to move external worktrees under `WT_ROOT`) |
+| `wt scan`      | Reconcile git worktrees with `.wt.json` (adopt orphans, drop stale entries; opt-in: move external worktrees under `WT_ROOT`, create worktrees for open PRs that have none) |
+| `wt sync-pr`   | Create a worktree for each open GitHub PR, fast-forward existing ones (`--mine` for your PRs only; skips forks, dirty or diverged worktrees) |
+| `wt update`    | Self-update: pull the tooling repo (fast-forward only) and rebuild wt-cli |
 | `wt prune`     | Interactively prune worktrees and/or local branches (`--no-worktrees`, `--no-branches`); `main`, `master`, `dev` and `develop` are never offered |
 | `wt agent [prompt]` | Create worktree + plan from a prompt via Claude |
 | `wt go`        | Launch interactive Claude using the local PLAN.md/AUDIT.md |
@@ -60,7 +62,7 @@ wt <command> [args]
 | `prModel`         | `claude-sonnet-4-6`  | Model used to generate commit + PR description    |
 | `reviewModel`     | `claude-opus-4-7`    | Model used to review the PR                       |
 
-`wt agent` requires `claude` on `PATH`. `wt release` and `wt review` require both `claude` and `gh`.
+`wt agent` requires `claude` on `PATH`. `wt release` and `wt review` require both `claude` and `gh`. `wt sync-pr` requires `gh`.
 
 ### Agent flow
 

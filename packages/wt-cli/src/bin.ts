@@ -17,6 +17,8 @@ import { followup } from './commands/followup.js'
 import { close } from './commands/close.js'
 import { scan } from './commands/scan.js'
 import { prune } from './commands/prune.js'
+import { syncPr } from './commands/sync-pr.js'
+import { update } from './commands/update.js'
 
 // Wrap a command action so thrown errors surface as a clean message instead of
 // an unhandled promise rejection (which hides the real cause behind a stack
@@ -97,6 +99,17 @@ program
   .option('--no-worktrees', 'Skip worktree pruning')
   .option('--no-branches', 'Skip branch pruning')
   .action(run(prune))
+
+program
+  .command('sync-pr')
+  .description('Create worktrees for open GitHub PRs, fast-forward the ones that already exist')
+  .option('--mine', 'Only PRs authored by you')
+  .action(run(syncPr))
+
+program
+  .command('update')
+  .description('Self-update: pull the tooling repo and rebuild wt-cli')
+  .action(run(update))
 
 program
   .command('agent')

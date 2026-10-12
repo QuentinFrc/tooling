@@ -89,6 +89,10 @@ export async function worktreeAdd(
   return 'created'
 }
 
+export async function mergeFfOnly(cwd: string, ref: string): Promise<void> {
+  await execa('git', ['merge', '--ff-only', '--quiet', ref], { cwd })
+}
+
 export async function isAncestor(cwd: string, ancestor: string, descendant: string): Promise<boolean> {
   try {
     await execa('git', ['merge-base', '--is-ancestor', ancestor, descendant], { cwd })
